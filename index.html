@@ -1,72 +1,30 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lupeps Hotspot</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f7fb;
-      margin: 0;
-      padding: 0;
-    }
-    .wrap {
-      max-width: 420px;
-      margin: 60px auto;
-      background: #fff;
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.08);
-      text-align: center;
-    }
-    h1 { margin-top: 0; }
-    p { color: #444; }
-    button {
-      border: 0;
-      border-radius: 8px;
-      padding: 12px 18px;
-      font-size: 16px;
-      cursor: pointer;
-      width: 100%;
-    }
-    .muted {
-      margin-top: 14px;
-      font-size: 12px;
-      color: #666;
-      word-break: break-all;
-    }
-  </style>
+  <title>Welcome – Connect to Internet</title>
 </head>
+
 <body>
-  <div class="wrap">
-    <h1>Welcome to Lupeps Hotspot</h1>
-    <p>Press continue to access the internet.</p>
-    <button id="continueBtn">Continue</button>
-    <div class="muted" id="status"></div>
-  </div>
+  <h1>Welcome to MyHotspot</h1>
+  <p>Click below to accept our terms and access the internet.</p>
+  <button onclick="grantAccess()">Accept & Connect</button>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const authaction = params.get("authaction");
-    const tok = params.get("tok");
-    const redir = params.get("redir") || "http://neverssl.com";
+    function grantAccess() {
+      const params = new URLSearchParams(window.location.search);
+      const authaction = params.get('authaction');
+      const tok = params.get('tok');
+      const redir = params.get('redir') || 'http://example.com';
 
-    document.getElementById("status").textContent =
-      authaction ? "Portal ready." : "Missing hotspot parameters.";
-
-    document.getElementById("continueBtn").addEventListener("click", function () {
-      if (!authaction || !tok) {
-        alert("Missing auth parameters from router.");
-        return;
+      if (authaction && tok) {
+        // Redirect to the router's auth endpoint
+        window.location.href = authaction + '&tok=' + tok + '&redir=' + encodeURIComponent(redir);
+      } else {
+        alert('Error: missing auth parameters.');
       }
-
-      const url = new URL(authaction);
-      url.searchParams.set("tok", tok);
-      url.searchParams.set("redir", redir);
-
-      window.location.href = url.toString();
-    });
+    }
   </script>
 </body>
+
 </html>
