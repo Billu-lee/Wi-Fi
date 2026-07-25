@@ -1,0 +1,5 @@
+- [x] Update application configuration properties (`AppProperties.java`)
+- [x] Map configuration properties in `application.yml`
+- [x] Create `VpnCertController.java`
+- [x] Update `mikrotik_setup_guide.md` with the Router CLI download command
+- [x] Compile and verify the backend changes
