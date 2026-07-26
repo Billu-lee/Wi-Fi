@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MikroTik Setup & Integration Guide</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- PrismJS for Beautiful Code Syntax Highlighting -->
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <!-- Mermaid.js for Rendering Diagrams -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --surface-color: #151c2c;
+            --border-color: #243049;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --primary: #2563eb;
+            --primary-hover: #3b82f6;
+            --accent: #10b981;
+            --font-main: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            width: 320px;
+            background-color: var(--surface-color);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 800;
+            font-size: 1.3rem;
+            color: #fff;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .brand i {
+            color: var(--primary);
+        }
+
+        .toc-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .toc-item a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .toc-item a:hover {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .toc-item.active a {
+            color: #fff;
+            background-color: var(--primary);
+        }
+
+        /* Main Content Container */
+        .main-content {
+            margin-left: 320px;
+            flex: 1;
+            padding: 3rem 4rem;
+            max-width: 1000px;
+        }
+
+        /* Typography & Markdown Styles */
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: #fff;
+            letter-spacing: -0.025em;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 3rem;
+            margin-bottom: 1rem;
+            color: #fff;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        p {
+            margin-bottom: 1.25rem;
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        ul, ol {
+            margin-bottom: 1.5rem;
+            margin-left: 1.5rem;
+            color: var(--text-muted);
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        a {
+            color: var(--primary-hover);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Custom Alert Blocks Styling */
+        .alert {
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .alert-title {
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert-content {
+            font-size: 0.95rem;
+        }
+
+        .alert-note {
+            background-color: rgba(59, 130, 246, 0.05);
+            border-left-color: #3b82f6;
+            color: #93c5fd;
+        }
+        .alert-note .alert-title { color: #3b82f6; }
+
+        .alert-important {
+            background-color: rgba(139, 92, 246, 0.05);
+            border-left-color: #8b5cf6;
+            color: #c084fc;
+        }
+        .alert-important .alert-title { color: #8b5cf6; }
+
+        .alert-warning {
+            background-color: rgba(245, 158, 11, 0.05);
+            border-left-color: #f59e0b;
+            color: #fde047;
+        }
+        .alert-warning .alert-title { color: #f59e0b; }
+
+        /* Code Block Container with Copy Button */
+        .code-container {
+            position: relative;
+            margin-bottom: 1.5rem;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        pre {
+            margin: 0 !important;
+            padding: 1.25rem !important;
+            background-color: var(--surface-color) !important;
+            font-family: var(--font-mono) !important;
+            font-size: 0.9rem !important;
+            overflow-x: auto;
+        }
+
+        code {
+            font-family: var(--font-mono) !important;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-family: var(--font-main);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background-color: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        .copy-btn.copied {
+            background-color: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        /* Divider */
+        hr {
+            border: none;
+            border-top: 1px solid var(--border-color);
+            margin: 3rem 0;
+        }
+
+        /* Mermaid Graph Styling */
+        .mermaid {
+            background-color: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="brand">
+            <i class="fa-solid fa-network-wired"></i>
+            <span>BilluNet Guide</span>
+        </div>
+        <ul class="toc-list" id="toc">
+            <!-- Dynamically populated -->
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <div id="content">
+            <h1>MikroTik Router Setup &amp; Integration Guide (Default Config Overlay)</h1>
+<p>This guide provides step-by-step instructions to configure a <strong>MikroTik hAP lite (4-port)</strong> router using its <strong>default factory configuration</strong> as the starting point. This avoids MAC Winbox connection issues and keeps your default internet/firewall settings intact.</p>
+<h3>System Topology &amp; Flow</h3>
+<div class="mermaid">graph TD
+    Client[Client Device] <-->|WiFi / LAN| MikroTik[MikroTik Router]
+    subgraph VPS [VPS Hosted Environment]
+        Portal[BilluNet Portal Frontend]
+        Backend[Spring Boot Backend API]
+        RADIUS[FreeRADIUS Service]
+        Database[(PostgreSQL DB)]
+    end
+    
+    MikroTik <-->|OpenVPN Tunnel| VPS
+    MikroTik -->|RADIUS Access-Request| RADIUS
+    RADIUS <-->|Read/Write Session Data| Database
+    Client -->|HTTP Redirection| Portal
+    Portal <-->|Identify / Authorize| Backend
+    Backend -->|CoA Dynamic Disconnect| RADIUS</div>
+<hr />
+<h3>Hardware Port Layout (hAP lite)</h3>
+<ul>
+<li><strong>Port 1 (<code>ether1</code>)</strong>: WAN (Connected to your Internet Modem).</li>
+<li><strong>Port 2 &amp; 3 (<code>ether2</code>, <code>ether3</code>) + Wi-Fi</strong>: Hotspot clients (Captive Portal active).</li>
+<li><strong>Port 4 (<code>ether4</code>)</strong>: Private Admin Management Port (Captive Portal bypassed).</li>
+</ul>
+<hr />
+<h2>Phase 1: Connect to Default Router</h2>
+<ol>
+<li>Reset your router to factory defaults if you made changes:</li>
+</ol>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros">   /system reset-configuration no-defaults=no skip-backup=yes</code></pre>
+                    </div>
+<ol>
+<li>Plug your internet source cable into <strong>Port 1 (<code>ether1</code>)</strong>.</li>
+<li>Plug your Admin PC into <strong>Port 2</strong>.</li>
+<li>Open Winbox, type <strong><code>192.168.88.1</code></strong> in the "Connect to" box, use username <strong><code>admin</code></strong> with a blank password, and click <strong>Connect</strong>.</li>
+</ol>
+<hr />
+<h2>Phase 2: Prevent Router Lockout (Admin Port Setup)</h2>
+<p>We will remove <strong>Port 4 (<code>ether4</code>)</strong> from the default bridge and configure it as a private management interface. When you plug into Port 4, you bypass the captive portal completely so you don't get locked out.</p>
+<p>Run these commands in the MikroTik Terminal:</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros"># 1. Remove ether4 from the default bridge
+/interface bridge port remove [find interface=ether4]
+
+# 2. Assign a separate management IP subnet to ether4
+/ip address
+add address=192.168.99.1/24 interface=ether4 network=192.168.99.0
+
+# 3. Create an IP Pool for the admin network
+/ip pool
+add name=admin-pool ranges=192.168.99.10-192.168.99.50
+
+# 4. Configure a DHCP Server on ether4 for your Admin PC
+/ip dhcp-server
+add name=dhcp-admin interface=ether4 address-pool=admin-pool disabled=no
+/ip dhcp-server network
+add address=192.168.99.0/24 gateway=192.168.99.1 dns-server=8.8.8.8,1.1.1.1
+
+# 5. Add ether4 to the LAN interface list so the default firewall allows Winbox/SSH/Web access
+/interface list member add interface=ether4 list=LAN</code></pre>
+                    </div>
+<p>*Action:* <strong>Unplug your Admin PC's Ethernet cable from Port 2, plug it into Port 4</strong>, and reconnect Winbox to the new IP: <strong><code>192.168.99.1</code></strong>.</p>
+<hr />
+<h2>Phase 3: Register Router in Admin Panel</h2>
+<p>Before configuring the VPN and RADIUS settings, you must register the router in your system:</p>
+<ol>
+<li>Log into your <strong>BilluNet Admin Panel</strong>.</li>
+<li>Navigate to <strong>Routers</strong> -&gt; <strong>Add New Router</strong>.</li>
+<li>Fill in the details to generate:</li>
+</ol>
+<ul>
+<li><strong><code>YOUR_ROUTER_CODE</code></strong>: e.g., <code>DSM-KARUME-001</code></li>
+<li><strong><code>YOUR_AGENT_KEY</code></strong>: The secure telemetry heartbeat validation key.</li>
+</ul>
+<hr />
+<h2>Phase 4: Secure OpenVPN (OVPN) Connection</h2>
+<p>To securely connect your router to the VPS private network (where FreeRADIUS and backend APIs reside).</p>
+<h3>4.1 Bypass Cloudflare Proxies (Static DNS)</h3>
+<p>To prevent Cloudflare from blocking the router's certificate downloads and VPN handshakes, add a static DNS entry on the router pointing directly to your VPS IP:</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros">/ip dns static add name=billunet-api.lupestationery.org address=178.238.233.102</code></pre>
+                    </div>
+<h3>4.2 Download Certificates (Zero-Touch Generation)</h3>
+<p>Run the following commands on the router terminal to download the CA certificate, and dynamically generate/download the unique client certificate and private key for this router.</p>
+
+                <div class="alert alert-note">
+                    <div class="alert-title"><i class="fa-solid fa-info-circle"></i> NOTE</div>
+                    <div class="alert-content">* Replace <code>YOUR_ROUTER_CODE</code> with your unique identifier generated in Phase 3.<br>* The <code>password=24558</code> parameter is the default password mapping to <code>VPN_DOWNLOAD_PASSWORD</code> configured on your VPS. If you configured a custom password in your VPS <code>.env</code> file, replace <code>24558</code> with your custom password.<br>* <strong>Zero-Touch Dynamic Allocation:</strong> When you run these fetch commands, the VPS backend automatically reserves a unique private VPN IP address for this router (e.g. <code>10.20.20.3</code>) and configures OpenVPN on the server for you.</div>
+                </div>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros"># Clean any old files
+/file remove ca.crt
+/file remove client.crt
+/file remove client.key
+
+# 1. Download CA certificate
+/tool fetch url="https://billunet-api.lupestationery.org/api/public/vpn/download-cert?password=24558" dst-path=ca.crt keep-result=yes check-certificate=no
+
+# 2. Download client certificate
+/tool fetch url="https://billunet-api.lupestationery.org/api/public/vpn/download-client-cert?password=24558&amp;routerCode=YOUR_ROUTER_CODE" dst-path=client.crt keep-result=yes check-certificate=no
+
+# 3. Download client private key
+/tool fetch url="https://billunet-api.lupestationery.org/api/public/vpn/download-client-key?password=24558&amp;routerCode=YOUR_ROUTER_CODE" dst-path=client.key keep-result=yes check-certificate=no</code></pre>
+                    </div>
+<h3>4.3 Import Certificates</h3>
+<p>Import the files in this sequence (press Enter when prompted for a password during the key import, as the key is not password-protected):</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros">/certificate import file-name=ca.crt name=ca.crt
+/certificate import file-name=client.crt name=client.crt
+/certificate import file-name=client.key name=client.key</code></pre>
+                    </div>
+<p>Verify the certificates are loaded by running <code>/certificate print</code>. You should see <code>client.crt</code> with a <strong><code>K</code></strong> (private key present) and <strong><code>R</code></strong> flags.</p>
+<h3>4.4 Configure OVPN Interface</h3>
+<p>Add and enable the OpenVPN client interface on the router:</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros">/interface ovpn-client
+add name=ovpn-billunet \
+    connect-to=178.238.233.102 \
+    port=1194 \
+    mode=ip \
+    protocol=tcp \
+    user="mikrotik-client-01" \
+    profile=default-encryption \
+    certificate=client.crt \
+    auth=sha256 \
+    cipher=aes256-gcm \
+    add-default-route=no \
+    disabled=no</code></pre>
+                    </div>
+<p>Verify it connects successfully by running <code>/interface ovpn-client monitor ovpn-billunet once</code> (should show <code>status: link established</code>).</p>
+<hr />
+<h2>Phase 5: Enable REST API, Security, &amp; API User</h2>
+<p>To allow the BilluNet VPS backend to poll active hotspot sessions and wireless registration metrics, you must enable the MikroTik REST API, restrict it for safety, and create a user matching the backend credentials:</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros"># 1. Enable the WWW service (required for RouterOS REST API)
+/ip service set www disabled=no port=80
+
+# 2. Secure the REST API by allowing access ONLY from the VPN private subnet
+# This prevents unauthorized access from WAN or public internet ports
+/ip firewall filter
+add chain=input action=accept protocol=tcp dst-port=80 src-address=10.20.20.0/24 comment="Allow BilluNet REST API over VPN" place-before=0
+
+# 3. Create a dedicated API user on the router
+# Replace portal-api and MyStrongPassword with the MIKROTIK_API_USERNAME and MIKROTIK_API_PASSWORD configured in your VPS .env configuration
+/user
+add name=portal-api group=write password=MyStrongPassword comment="BilluNet Backend REST API User"</code></pre>
+                    </div>
+<hr />
+<h2>Phase 6: Configure RADIUS Client</h2>
+<p>Delegate user authentication, authorization, and accounting to the VPS FreeRADIUS server over the VPN tunnel.</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros"># 1. Add the RADIUS Server (pointing to the VPS VPN Gateway IP)
+/radius
+add service=hotspot \
+    address=10.20.20.1 \
+    secret="billunet-radius-secret-2026" \
+    authentication-port=1812 \
+    accounting-port=1813 \
+    timeout=3s \
+    comment="BilluNet FreeRADIUS Server"
+
+# 2. Enable RADIUS Incoming (CoA / Disconnect Messages)
+# This allows the Spring Boot backend to kick users or update limits in real time
+/radius incoming
+set accept=yes port=3799</code></pre>
+                    </div>
+<hr />
+<h2>Phase 7: Configure Hotspot Server and Profiles</h2>
+<p>We will configure the Hotspot Server to run directly on the default LAN bridge (<code>bridge</code>) using the existing DHCP configuration.</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros"># 1. Create Hotspot User Profile
+/ip hotspot user profile
+add name=billunet-profile shared-users=1 idle-timeout=none keepalive-timeout=2m
+
+# 2. Create Hotspot Server Profile (Pointing to the default bridge gateway 192.168.88.1)
+/ip hotspot profile
+add name=hsprof-billunet \
+    hotspot-address=192.168.88.1 \
+    html-directory=flash/hotspot \
+    login-by=http-pap \
+    use-radius=yes \
+    nas-port-type=19 \
+    radius-default-domain="" \
+    radius-location-id="" \
+    radius-location-name="" \
+    radius-mac-format="XX:XX:XX:XX:XX:XX"
+
+# 3. Create and Enable the Hotspot Server on the default LAN bridge
+/ip hotspot
+add name=hs-billunet \
+    interface=bridge \
+    address-pool=default-dhcp \
+    profile=hsprof-billunet \
+    disabled=no</code></pre>
+                    </div>
+<hr />
+<h2>Phase 8: Hotspot Walled Garden Configuration</h2>
+<p>Allow unauthenticated clients to reach the captive portal frontend, the backend API, and payment gateways.</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros">/ip hotspot walled-garden
+# 1. Allow the BilluNet Portal Domains (Frontend &amp; Backend APIs)
+add dst-host=billunet.lupestationery.org action=allow
+add dst-host=billunet-api.lupestationery.org action=allow
+
+# 2. Allow Local VPN Subnet Access (for Dev/Tunnel environments)
+add dst-host=10.20.20.1 action=allow
+
+# 3. Allow ClickPesa Gateway
+add dst-host=*.clickpesa.com action=allow
+add dst-host=clickpesa.com action=allow
+
+# 4. Allow Flutterwave Gateway
+add dst-host=*.flutterwave.com action=allow
+add dst-host=flutterwave.com action=allow
+
+# 5. Allow Google Fonts (used by Portal Front-end UI)
+add dst-host=fonts.googleapis.com action=allow
+add dst-host=fonts.gstatic.com action=allow</code></pre>
+                    </div>
+<hr />
+<h2>Phase 9: Captive Portal Redirect Page (<code>login.html</code>)</h2>
+<p>Replace the contents of the <code>login.html</code> file inside your MikroTik router's hotspot HTML directory (typically <code>flash/hotspot/login.html</code> or <code>hotspot/login.html</code>) with the exact template below:</p>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;/head&gt;
+&lt;body&gt;
+&lt;script&gt;
+window.location.href =
+  "https://billunet.lupestationery.org/?" +
+  "clientmac=$(mac)&amp;clientip=$(ip)" +
+  "&amp;router_code=YOUR_ROUTER_CODE" +
+  "&amp;link_login=$(link-login-only)&amp;link_orig=$(link-orig-esc)";
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+                    </div>
+<h3>Configuration:</h3>
+<ul>
+<li>Replace <code>YOUR_ROUTER_CODE</code> with the identifier generated in Phase 3 (e.g., <code>DSM-KARUME-001</code>).</li>
+</ul>
+<hr />
+<h2>Phase 10: Telemetry Heartbeat Script &amp; Scheduler</h2>
+<p>To keep the router registered as <code>ONLINE</code> in the BilluNet admin panel, configure this heartbeat task. It dynamically resolves the router's current OpenVPN interface IP address on-the-fly from memory and reports it to the server.</p>
+<p>Paste the following command block directly into the MikroTik Terminal:</p>
+
+                <div class="alert alert-note">
+                    <div class="alert-title"><i class="fa-solid fa-info-circle"></i> NOTE</div>
+                    <div class="alert-content">If you are updating a previously configured heartbeat task, delete the old scheduler entry first by running:<br><code>/system scheduler remove [find name="billunet-hb"]</code></div>
+                </div>
+
+                    <div class="code-container">
+                        <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        <pre><code class="language-routeros">/system scheduler
+add name="billunet-hb" interval=60s on-event={
+  :local interfaceName "ovpn-billunet"
+  :if ([:len [/interface find name=$interfaceName]] &gt; 0) do={
+      :local ipWithSubnet [/ip address get [find interface=$interfaceName] address]
+      :local cleanIp [:pick $ipWithSubnet 0 [:find $ipWithSubnet "/"]]
+      /tool fetch url="https://billunet-api.lupestationery.org/api/router-agent/heartbeat" \
+          http-method=post \
+          http-header-field="Content-Type: application/json,X-Router-Key: YOUR_AGENT_KEY" \
+          http-data="{\"routerCode\":\"YOUR_ROUTER_CODE\",\"managementIp\":\"$cleanIp\",\"routerName\":\"YOUR_ROUTER_NAME\"}" \
+          keep-result=no check-certificate=no
+  }
+}</code></pre>
+                    </div>
+<h3>Configuration:</h3>
+<ul>
+<li>Replace <code>YOUR_AGENT_KEY</code> with the generated security key for this router (obtained in Phase 3).</li>
+<li>Replace <code>YOUR_ROUTER_CODE</code> and <code>YOUR_ROUTER_NAME</code> with the corresponding values for your router.</li>
+</ul>
+<hr />
+<h2>Phase 11: Integration Verification</h2>
+<ol>
+<li>Connect a client device (phone or laptop) to <strong>Port 2 or 3</strong> (or the <strong>Wi-Fi</strong> network).</li>
+<li>The device should automatically trigger the redirect page <code>login.html</code>, which redirects it to the BilluNet Captive Portal page.</li>
+<li>Verify that the client is redirected to the URL containing their MAC address and location details.</li>
+<li>Complete the login or plan purchase.</li>
+<li>Once authorized, the portal will request <code>/api/captive/continue</code> which triggers the router's login and authorizes internet access.</li>
+<li>Verify that the router appears as <code>ONLINE</code> in the BilluNet administration dashboard.</li>
+</ol>
+
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Mermaid diagrams
+            if (typeof mermaid !== 'undefined') {
+                mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+            }
+
+            // Generate Table of Contents Sidebar dynamically
+            const headings = document.querySelectorAll('#content h2');
+            const toc = document.getElementById('toc');
+            
+            headings.forEach((heading, index) => {
+                const text = heading.textContent.trim();
+                const id = 'phase-' + (index + 1);
+                heading.id = id;
+
+                const li = document.createElement('li');
+                li.className = 'toc-item';
+                if (index === 0) li.classList.add('active');
+
+                const a = document.createElement('a');
+                a.href = '#' + id;
+                a.innerHTML = '<i class="fa-solid fa-circle-notch"></i> ' + text;
+                
+                a.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    document.querySelectorAll('.toc-item').forEach(item => item.classList.remove('active'));
+                    li.classList.add('active');
+                    heading.scrollIntoView({ behavior: 'smooth' });
+                });
+
+                li.appendChild(a);
+                toc.appendChild(li);
+            });
+
+            // Highlight headings on scroll
+            window.addEventListener('scroll', () => {
+                let currentActive = '';
+                headings.forEach(heading => {
+                    const top = heading.getBoundingClientRect().top;
+                    if (top < 150) {
+                        currentActive = heading.id;
+                    }
+                });
+
+                if (currentActive) {
+                    document.querySelectorAll('.toc-item').forEach(item => {
+                        item.classList.remove('active');
+                        const link = item.querySelector('a');
+                        if (link.getAttribute('href') === '#' + currentActive) {
+                            item.classList.add('active');
+                        }
+                    });
+                }
+            });
+
+            // Initial syntax highlighting trigger
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAll();
+            }
+        });
+
+        // Global Copy Code Helper
+        function copyCode(button) {
+            const pre = button.nextElementSibling;
+            const code = pre.querySelector('code');
+            const textToCopy = code.innerText;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                button.classList.add('copied');
+                button.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                setTimeout(() => {
+                    button.classList.remove('copied');
+                    button.innerHTML = '<i class="fa-regular fa-copy"></i> Copy';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
-# MikroTik Router Setup & Integration Guide (A to Z)
+# MikroTik Router Setup & Integration Guide (Default Config Overlay)
 
-This guide provides the complete, step-by-step instructions and commands (A to Z) to configure a new **MikroTik RouterOS** router to connect to the BilluNet system hosted on your VPS.
+This guide provides step-by-step instructions to configure a **MikroTik hAP lite (4-port)** router using its **default factory configuration** as the starting point. This avoids MAC Winbox connection issues and keeps your default internet/firewall settings intact.
 
 ### System Topology & Flow
 ```mermaid
@@ -23,50 +23,86 @@ graph TD
 
 ---
 
-## Step 1: Basic Local Interface & WAN Setup
-First, prepare the local interfaces and bridge for hotspot traffic, and ensure the WAN port (`ether1`) is connected to the internet.
-
-```routeros
-# 1. Create a bridge for Hotspot clients
-/interface bridge
-add name=bridge-hotspot comment="Hotspot Client Bridge"
-
-# 2. Add LAN interfaces (e.g., ether2 to ether5) to the Hotspot Bridge
-/interface bridge port
-add bridge=bridge-hotspot interface=ether2
-add bridge=bridge-hotspot interface=ether3
-add bridge=bridge-hotspot interface=ether4
-add bridge=bridge-hotspot interface=ether5
-
-# 3. Configure IP address for the Hotspot bridge
-/ip address
-add address=192.168.10.1/24 interface=bridge-hotspot network=192.168.10.0
-
-# 4. Configure WAN DHCP Client on ether1
-/ip dhcp-client
-add interface=ether1 disabled=no comment="WAN Internet Port"
-
-# 5. Enable masquerade NAT rule for WAN internet access
-/ip firewall nat
-add chain=srcnat out-interface=ether1 action=masquerade comment="Masquerade for WAN"
-```
+### Hardware Port Layout (hAP lite)
+* **Port 1 (`ether1`)**: WAN (Connected to your Internet Modem).
+* **Port 2 & 3 (`ether2`, `ether3`) + Wi-Fi**: Hotspot clients (Captive Portal active).
+* **Port 4 (`ether4`)**: Private Admin Management Port (Captive Portal bypassed).
 
 ---
 
-## Step 2: OpenVPN (OVPN) Client Configuration
-To securely connect the MikroTik router to your VPS private network containing the FreeRADIUS and API servers.
+## Phase 1: Connect to Default Router
 
-> [!IMPORTANT]
-> **MikroTik RouterOS does not support importing `.ovpn` profile files directly.** Instead, you download the CA certificate, the client certificate, and the client private key, and configure the client connection parameters manually using the commands detailed below.
+1. Reset your router to factory defaults if you made changes:
+   ```routeros
+   /system reset-configuration no-defaults=no skip-backup=yes
+   ```
+2. Plug your internet source cable into **Port 1 (`ether1`)**.
+3. Plug your Admin PC into **Port 2**.
+4. Open Winbox, type **`192.168.88.1`** in the "Connect to" box, use username **`admin`** with a blank password, and click **Connect**.
 
-### 2.1 Bypass Cloudflare Proxies (Static DNS)
-To prevent Cloudflare from blocking the router's file downloads and VPN handshakes, add a static DNS entry on the router pointing directly to your VPS IP:
+---
+
+## Phase 2: Prevent Router Lockout (Admin Port Setup)
+
+We will remove **Port 4 (`ether4`)** from the default bridge and configure it as a private management interface. When you plug into Port 4, you bypass the captive portal completely so you don't get locked out.
+
+Run these commands in the MikroTik Terminal:
+
+```routeros
+# 1. Remove ether4 from the default bridge
+/interface bridge port remove [find interface=ether4]
+
+# 2. Assign a separate management IP subnet to ether4
+/ip address
+add address=192.168.99.1/24 interface=ether4 network=192.168.99.0
+
+# 3. Create an IP Pool for the admin network
+/ip pool
+add name=admin-pool ranges=192.168.99.10-192.168.99.50
+
+# 4. Configure a DHCP Server on ether4 for your Admin PC
+/ip dhcp-server
+add name=dhcp-admin interface=ether4 address-pool=admin-pool disabled=no
+/ip dhcp-server network
+add address=192.168.99.0/24 gateway=192.168.99.1 dns-server=8.8.8.8,1.1.1.1
+
+# 5. Add ether4 to the LAN interface list so the default firewall allows Winbox/SSH/Web access
+/interface list member add interface=ether4 list=LAN
+```
+
+*Action:* **Unplug your Admin PC's Ethernet cable from Port 2, plug it into Port 4**, and reconnect Winbox to the new IP: **`192.168.99.1`**.
+
+---
+
+## Phase 3: Register Router in Admin Panel
+
+Before configuring the VPN and RADIUS settings, you must register the router in your system:
+
+1. Log into your **BilluNet Admin Panel**.
+2. Navigate to **Routers** -> **Add New Router**.
+3. Fill in the details to generate:
+   * **`YOUR_ROUTER_CODE`**: e.g., `DSM-KARUME-001`
+   * **`YOUR_AGENT_KEY`**: The secure telemetry heartbeat validation key.
+
+---
+
+## Phase 4: Secure OpenVPN (OVPN) Connection
+
+To securely connect your router to the VPS private network (where FreeRADIUS and backend APIs reside).
+
+### 4.1 Bypass Cloudflare Proxies (Static DNS)
+To prevent Cloudflare from blocking the router's certificate downloads and VPN handshakes, add a static DNS entry on the router pointing directly to your VPS IP:
 ```routeros
 /ip dns static add name=billunet-api.lupestationery.org address=178.238.233.102
 ```
 
-### 2.2 Download Certificates (Zero-Touch On-The-Fly Generation)
-Run the following commands on the router terminal to download the CA certificate, and dynamically generate/download the unique client certificate and private key for this router (replace `YOUR_ROUTER_CODE` with your unique identifier, e.g. `router-02`):
+### 4.2 Download Certificates (Zero-Touch Generation)
+Run the following commands on the router terminal to download the CA certificate, and dynamically generate/download the unique client certificate and private key for this router.
+
+> [!NOTE]
+> * Replace `YOUR_ROUTER_CODE` with your unique identifier generated in Phase 3.
+> * The `password=24558` parameter is the default password mapping to `VPN_DOWNLOAD_PASSWORD` configured on your VPS. If you configured a custom password in your VPS `.env` file, replace `24558` with your custom password.
+> * **Zero-Touch Dynamic Allocation:** When you run these fetch commands, the VPS backend automatically reserves a unique private VPN IP address for this router (e.g. `10.20.20.3`) and configures OpenVPN on the server for you.
 
 ```routeros
 # Clean any old files
@@ -77,14 +113,14 @@ Run the following commands on the router terminal to download the CA certificate
 # 1. Download CA certificate
 /tool fetch url="https://billunet-api.lupestationery.org/api/public/vpn/download-cert?password=24558" dst-path=ca.crt keep-result=yes check-certificate=no
 
-# 2. Download client certificate (VPS automatically signs and generates this on-the-fly)
+# 2. Download client certificate
 /tool fetch url="https://billunet-api.lupestationery.org/api/public/vpn/download-client-cert?password=24558&routerCode=YOUR_ROUTER_CODE" dst-path=client.crt keep-result=yes check-certificate=no
 
-# 3. Download client private key (VPS automatically signs and generates this on-the-fly)
+# 3. Download client private key
 /tool fetch url="https://billunet-api.lupestationery.org/api/public/vpn/download-client-key?password=24558&routerCode=YOUR_ROUTER_CODE" dst-path=client.key keep-result=yes check-certificate=no
 ```
 
-### 2.3 Import Certificates
+### 4.3 Import Certificates
 Import the files in this sequence (press Enter when prompted for a password during the key import, as the key is not password-protected):
 ```routeros
 /certificate import file-name=ca.crt name=ca.crt
@@ -93,7 +129,7 @@ Import the files in this sequence (press Enter when prompted for a password duri
 ```
 Verify the certificates are loaded by running `/certificate print`. You should see `client.crt` with a **`K`** (private key present) and **`R`** flags.
 
-### 2.4 Configure OVPN Interface
+### 4.4 Configure OVPN Interface
 Add and enable the OpenVPN client interface on the router:
 ```routeros
 /interface ovpn-client
@@ -114,8 +150,30 @@ Verify it connects successfully by running `/interface ovpn-client monitor ovpn-
 
 ---
 
-## Step 3: Configure RADIUS Client
-To delegate authentication, authorization, and session accounting to the VPS FreeRADIUS server.
+## Phase 5: Enable REST API, Security, & API User
+
+To allow the BilluNet VPS backend to poll active hotspot sessions and wireless registration metrics, you must enable the MikroTik REST API, restrict it for safety, and create a user matching the backend credentials:
+
+```routeros
+# 1. Enable the WWW service (required for RouterOS REST API)
+/ip service set www disabled=no port=80
+
+# 2. Secure the REST API by allowing access ONLY from the VPN private subnet
+# This prevents unauthorized access from WAN or public internet ports
+/ip firewall filter
+add chain=input action=accept protocol=tcp dst-port=80 src-address=10.20.20.0/24 comment="Allow BilluNet REST API over VPN" place-before=0
+
+# 3. Create a dedicated API user on the router
+# Replace portal-api and MyStrongPassword with the MIKROTIK_API_USERNAME and MIKROTIK_API_PASSWORD configured in your VPS .env configuration
+/user
+add name=portal-api group=write password=MyStrongPassword comment="BilluNet Backend REST API User"
+```
+
+---
+
+## Phase 6: Configure RADIUS Client
+
+Delegate user authentication, authorization, and accounting to the VPS FreeRADIUS server over the VPN tunnel.
 
 ```routeros
 # 1. Add the RADIUS Server (pointing to the VPS VPN Gateway IP)
@@ -136,29 +194,20 @@ set accept=yes port=3799
 
 ---
 
-## Step 4: Configure Hotspot and Profiles
-Setup the local DHCP server, User Profile, and Hotspot profile to run PAP authentication using RADIUS.
+## Phase 7: Configure Hotspot Server and Profiles
+
+We will configure the Hotspot Server to run directly on the default LAN bridge (`bridge`) using the existing DHCP configuration.
 
 ```routeros
-# 1. Create client IP pool
-/ip pool
-add name=hs-pool ranges=192.168.10.10-192.168.10.254
-
-# 2. Setup DHCP Server on Hotspot Bridge
-/ip dhcp-server
-add name=dhcp-hotspot interface=bridge-hotspot address-pool=hs-pool disabled=no
-/ip dhcp-server network
-add address=192.168.10.0/24 gateway=192.168.10.1 dns-server=8.8.8.8,1.1.1.1
-
-# 3. Create Hotspot User Profile (Applied to RADIUS accounts)
+# 1. Create Hotspot User Profile
 /ip hotspot user profile
 add name=billunet-profile shared-users=1 idle-timeout=none keepalive-timeout=2m
 
-# 4. Create Hotspot Server Profile
+# 2. Create Hotspot Server Profile (Pointing to the default bridge gateway 192.168.88.1)
 /ip hotspot profile
 add name=hsprof-billunet \
-    hotspot-address=192.168.10.1 \
-    html-directory=hotspot \
+    hotspot-address=192.168.88.1 \
+    html-directory=flash/hotspot \
     login-by=http-pap \
     use-radius=yes \
     nas-port-type=19 \
@@ -167,19 +216,20 @@ add name=hsprof-billunet \
     radius-location-name="" \
     radius-mac-format="XX:XX:XX:XX:XX:XX"
 
-# 5. Create and Enable the Hotspot Server
+# 3. Create and Enable the Hotspot Server on the default LAN bridge
 /ip hotspot
 add name=hs-billunet \
-    interface=bridge-hotspot \
-    address-pool=hs-pool \
+    interface=bridge \
+    address-pool=default-dhcp \
     profile=hsprof-billunet \
     disabled=no
 ```
 
 ---
 
-## Step 5: Hotspot Walled Garden Configuration
-Before logging in, clients must be allowed to reach the portal web application and any payment gateways. Add these destinations to bypass the hotspot wall.
+## Phase 8: Hotspot Walled Garden Configuration
+
+Allow unauthenticated clients to reach the captive portal frontend, the backend API, and payment gateways.
 
 ```routeros
 /ip hotspot walled-garden
@@ -205,8 +255,9 @@ add dst-host=fonts.gstatic.com action=allow
 
 ---
 
-## Step 6: Captive Portal Redirect Page (`login.html`)
-Replace the contents of the `login.html` file inside your MikroTik router's hotspot HTML directory (typically `flash/hotspot/login.html` or `hotspot/login.html`) with the exact template provided by the system:
+## Phase 9: Captive Portal Redirect Page (`login.html`)
+
+Replace the contents of the `login.html` file inside your MikroTik router's hotspot HTML directory (typically `flash/hotspot/login.html` or `hotspot/login.html`) with the exact template below:
 
 ```html
 <!DOCTYPE html>
@@ -223,36 +274,49 @@ window.location.href =
 </body>
 </html>
 ```
+
 ### Configuration:
-* Replace `YOUR_ROUTER_CODE` with the identifier of the router (e.g., `router-02`).
+* Replace `YOUR_ROUTER_CODE` with the identifier generated in Phase 3 (e.g., `DSM-KARUME-001`).
 
 ---
 
-## Step 7: Telemetry Heartbeat Script & Scheduler
-To keep the router registered as `ONLINE` in the BilluNet admin panel, run this command in the MikroTik Terminal to add a scheduler that posts heartbeat data and its current VPN management IP every 60 seconds:
+## Phase 10: Telemetry Heartbeat Script & Scheduler
+
+To keep the router registered as `ONLINE` in the BilluNet admin panel, configure this heartbeat task. It dynamically resolves the router's current OpenVPN interface IP address on-the-fly from memory and reports it to the server.
+
+Paste the following command block directly into the MikroTik Terminal:
+
+> [!NOTE]
+> If you are updating a previously configured heartbeat task, delete the old scheduler entry first by running:
+> `/system scheduler remove [find name="billunet-hb"]`
 
 ```routeros
 /system scheduler
-add name="billunet-hb" interval=60s on-event={\
-  /tool fetch url="https://billunet-api.lupestationery.org/api/router-agent/heartbeat" \
-    http-method=post \
-    http-header-field="Content-Type: application/json,X-Router-Key: YOUR_AGENT_KEY" \
-    http-data="{\\\"routerCode\\\":\\\"YOUR_ROUTER_CODE\\\",\\\"managementIp\\\":\\\"YOUR_MANAGEMENT_IP\\\",\\\"routerName\\\":\\\"YOUR_ROUTER_NAME\\\"}" \
-    keep-result=no check-certificate=no}
+add name="billunet-hb" interval=60s on-event={
+  :local interfaceName "ovpn-billunet"
+  :if ([:len [/interface find name=$interfaceName]] > 0) do={
+      :local ipWithSubnet [/ip address get [find interface=$interfaceName] address]
+      :local cleanIp [:pick $ipWithSubnet 0 [:find $ipWithSubnet "/"]]
+      /tool fetch url="https://billunet-api.lupestationery.org/api/router-agent/heartbeat" \
+          http-method=post \
+          http-header-field="Content-Type: application/json,X-Router-Key: YOUR_AGENT_KEY" \
+          http-data="{\"routerCode\":\"YOUR_ROUTER_CODE\",\"managementIp\":\"$cleanIp\",\"routerName\":\"YOUR_ROUTER_NAME\"}" \
+          keep-result=no check-certificate=no
+  }
+}
 ```
 
 ### Configuration:
-* Replace `YOUR_AGENT_KEY` with the generated security key for this router (obtained from the admin dashboard under the router details).
+* Replace `YOUR_AGENT_KEY` with the generated security key for this router (obtained in Phase 3).
 * Replace `YOUR_ROUTER_CODE` and `YOUR_ROUTER_NAME` with the corresponding values for your router.
-* Replace `YOUR_MANAGEMENT_IP` with the dynamically assigned OpenVPN IP of the router (e.g. `10.20.20.2` or `10.20.20.3`).
 
 ---
 
-## Step 8: Integration Verification
-1. Connect a client device (phone or laptop) to the hotspot network.
+## Phase 11: Integration Verification
+
+1. Connect a client device (phone or laptop) to **Port 2 or 3** (or the **Wi-Fi** network).
 2. The device should automatically trigger the redirect page `login.html`, which redirects it to the BilluNet Captive Portal page.
 3. Verify that the client is redirected to the URL containing their MAC address and location details.
 4. Complete the login or plan purchase.
-5. Once authorized, the portal should hit `/api/captive/continue` which outputs the continue redirect url (MikroTik endpoint with username and password) and log you in.
-6. The MikroTik router will query FreeRADIUS over the OpenVPN tunnel, fetch the `Access-Accept` response, and permit internet access.
-7. Verify that the router appears as `ONLINE` in the BilluNet administration dashboard.
+5. Once authorized, the portal will request `/api/captive/continue` which triggers the router's login and authorizes internet access.
+6. Verify that the router appears as `ONLINE` in the BilluNet administration dashboard.
