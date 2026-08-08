@@ -461,7 +461,7 @@ add name=ovpn-billunet \
 # 2. Secure the REST API by allowing access ONLY from the VPN private subnet
 # This prevents unauthorized access from WAN or public internet ports
 /ip firewall filter
-add chain=input action=accept protocol=tcp dst-port=80 src-address=10.20.20.0/24 comment="Allow BilluNet REST API over VPN" place-before=0
+add chain=input action=accept protocol=tcp dst-port=80 src-address=10.20.20.0/24 comment="Allow BilluNet REST API over VPN"
 
 # 3. Create a dedicated API user on the router
 # Replace portal-api and MyStrongPassword with the MIKROTIK_API_USERNAME and MIKROTIK_API_PASSWORD configured in your VPS .env configuration
@@ -513,10 +513,11 @@ add name=hsprof-billunet \
     radius-mac-format="XX:XX:XX:XX:XX:XX"
 
 # 3. Create and Enable the Hotspot Server on the default LAN bridge
+# Note: Set address-pool to 'none' or replace with your actual DHCP pool name (e.g. hs-pool-1)
 /ip hotspot
 add name=hs-billunet \
     interface=bridge \
-    address-pool=default-dhcp \
+    address-pool=none \
     profile=hsprof-billunet \
     disabled=no</code></pre>
                     </div>
@@ -526,25 +527,29 @@ add name=hs-billunet \
 
                     <div class="code-container">
                         <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
-                        <pre><code class="language-routeros">/ip hotspot walled-garden
+                        <pre><code class="language-routeros">/ip hotspot walled-garden ip
 # 1. Allow the BilluNet Portal Domains (Frontend &amp; Backend APIs)
-add dst-host=billunet.lupestationery.org action=allow
-add dst-host=billunet-api.lupestationery.org action=allow
+add dst-host=billunet.lupestationery.org action=accept
+add dst-host=billunet-api.lupestationery.org action=accept
+add dst-address=178.238.233.102 action=accept
+add dst-address=10.20.20.1 action=accept
 
-# 2. Allow Local VPN Subnet Access (for Dev/Tunnel environments)
-add dst-host=10.20.20.1 action=allow
+# 2. Allow Iconify &amp; fallback domains
+add dst-host=*.iconify.design action=accept
+add dst-host=*.simplesvg.com action=accept
+add dst-host=*.unisvg.com action=accept
 
 # 3. Allow ClickPesa Gateway
-add dst-host=*.clickpesa.com action=allow
-add dst-host=clickpesa.com action=allow
+add dst-host=*.clickpesa.com action=accept
+add dst-host=clickpesa.com action=accept
 
 # 4. Allow Flutterwave Gateway
-add dst-host=*.flutterwave.com action=allow
-add dst-host=flutterwave.com action=allow
+add dst-host=*.flutterwave.com action=accept
+add dst-host=flutterwave.com action=accept
 
 # 5. Allow Google Fonts (used by Portal Front-end UI)
-add dst-host=fonts.googleapis.com action=allow
-add dst-host=fonts.gstatic.com action=allow</code></pre>
+add dst-host=fonts.googleapis.com action=accept
+add dst-host=fonts.gstatic.com action=accept</code></pre>
                     </div>
 <hr />
 <h2>Phase 9: Captive Portal Redirect Page (<code>login.html</code>)</h2>
@@ -611,6 +616,80 @@ add name="billunet-hb" interval=60s on-event={
 <li>Once authorized, the portal will request <code>/api/captive/continue</code> which triggers the router's login and authorizes internet access.</li>
 <li>Verify that the router appears as <code>ONLINE</code> in the BilluNet administration dashboard.</li>
 </ol>
+<hr />
+<h2>Appendix: Local VirtualBox Practice Environment</h2>
+<p>To practice configuring MikroTik RouterOS and integrating it with your local development environment without physical router hardware, you can set up a virtual sandbox inside <strong>VirtualBox</strong>.</p>
+
+<h3>Step 1: Download MikroTik CHR</h3>
+<p>Download the <strong>VDI Image</strong> of the MikroTik Cloud Hosted Router (CHR) from the <a href="https://mikrotik.com/download" target="_blank">MikroTik Downloads page</a>.</p>
+
+<h3>Step 2: VirtualBox VM Network Configuration</h3>
+<p>Create a Linux (64-bit) VM in VirtualBox with 256MB RAM and assign the downloaded VDI file as its virtual hard disk. Then, configure three network adapters in the VM settings:</p>
+<ul>
+    <li><strong>Adapter 1 (WAN)</strong>: Attached to <strong>NAT</strong> (gives the router VM internet access via the host).</li>
+    <li><strong>Adapter 2 (LAN)</strong>: Attached to <strong>Internal Network</strong> (named <code>hotspot-lan</code>, where client test VMs will connect).</li>
+    <li><strong>Adapter 3 (Admin Management)</strong>: Attached to <strong>Host-only Adapter</strong> (e.g. <code>VirtualBox Host-Only Ethernet Adapter</code>, allowing your host PC and Winbox to communicate with the router).</li>
+</ul>
+
+<h3>Step 3: Initial IP Setup (MikroTik Console)</h3>
+<p>Start the VM, login as <code>admin</code> (no password), set a new password, and run this command in the CLI to set up management access:</p>
+<div class="code-container">
+    <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+    <pre><code class="language-routeros">/ip address add address=192.168.56.10/24 interface=ether3 network=192.168.56.0</code></pre>
+</div>
+<p>Connect Winbox from your Windows Host PC to <code>192.168.56.10</code>.</p>
+
+<h3>Step 4: Configure DHCP & NAT</h3>
+<p>Open the Terminal in Winbox and run the following configuration overlay to prepare the Hotspot interface and enable NAT:</p>
+<div class="code-container">
+    <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+    <pre><code class="language-routeros"># Create bridge and assign ports
+/interface bridge add name=bridge-hotspot
+/interface bridge port add bridge=bridge-hotspot interface=ether2
+
+# Configure Local LAN Subnet and IP Pool
+/ip address add address=192.168.88.1/24 interface=bridge-hotspot network=192.168.88.0
+/ip pool add name=hotspot-pool ranges=192.168.88.10-192.168.88.254
+/ip dhcp-server add address-pool=hotspot-pool disabled=no interface=bridge-hotspot name=dhcp-hotspot
+/ip dhcp-server network add address=192.168.88.0/24 gateway=192.168.88.1 dns-server=8.8.8.8,1.1.1.1
+
+# Enable WAN NAT Masquerading
+/ip firewall nat add chain=srcnat action=masquerade out-interface=ether1 comment="NAT to Internet"</code></pre>
+</div>
+
+<h3>Step 5: Hotspot & Captive Redirect Configuration</h3>
+<p>Configure the Hotspot Server, walled garden, and redirect template to target your Host PC's local server (Vite frontend on port 5173, Spring Boot backend on port 8081):</p>
+<div class="code-container">
+    <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+    <pre><code class="language-routeros"># Setup Hotspot Server Profile
+/ip hotspot user profile add name=billunet-profile shared-users=1
+/ip hotspot profile add name=hsprof-billunet hotspot-address=192.168.88.1 login-by=http-pap use-radius=no
+/ip hotspot add name=hs-billunet interface=bridge-hotspot address-pool=hotspot-pool profile=hsprof-billunet disabled=no
+
+# Allow access to local Host IP in Walled Garden
+/ip hotspot walled-garden add dst-host=192.168.56.1 action=allow</code></pre>
+</div>
+<p>Upload a custom <code>login.html</code> file to the router's <code>flash/hotspot/login.html</code> directory to redirect unauthenticated guest clients to the local Vite server:</p>
+<div class="code-container">
+    <button class="copy-btn" onclick="copyCode(this)"><i class="fa-regular fa-copy"></i> Copy</button>
+    <pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;/head&gt;
+&lt;body&gt;
+&lt;script&gt;
+window.location.href =
+  "http://192.168.56.1:5173/?" +
+  "clientmac=$(mac)&amp;clientip=$(ip)" +
+  "&amp;router_code=DEV-ROUTER-01" +
+  "&amp;link_login=$(link-login-only)&amp;link_orig=$(link-orig-esc)";
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+</div>
+
+<h3>Step 6: Test Client VM Setup</h3>
+<p>Create another lightweight guest VM (e.g. Lubuntu or Alpine) and set its Network Adapter 1 to <strong>Internal Network</strong> (named <code>hotspot-lan</code>). When you start this VM and open a web browser to search for any HTTP site (like <code>http://neverssl.com</code>), you will be intercepted and redirected to your local captive portal on the Host machine for authorization!</p>
+
 
         </div>
     </main>

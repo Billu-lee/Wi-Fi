@@ -6,8 +6,6 @@ frontend/.vite/
 .DS_Store
 tailadmin-template/
 template/
-.claude
-.cursor
 .cursorignore
 .vscode
 .agent

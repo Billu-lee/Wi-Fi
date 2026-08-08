@@ -160,8 +160,9 @@ To allow the BilluNet VPS backend to poll active hotspot sessions and wireless r
 
 # 2. Secure the REST API by allowing access ONLY from the VPN private subnet
 # This prevents unauthorized access from WAN or public internet ports
+# Note: If your firewall filter list is currently empty, omit the 'place-before=0' parameter.
 /ip firewall filter
-add chain=input action=accept protocol=tcp dst-port=80 src-address=10.20.20.0/24 comment="Allow BilluNet REST API over VPN" place-before=0
+add chain=input action=accept protocol=tcp dst-port=80 src-address=10.20.20.0/24 comment="Allow BilluNet REST API over VPN"
 
 # 3. Create a dedicated API user on the router
 # Replace portal-api and MyStrongPassword with the MIKROTIK_API_USERNAME and MIKROTIK_API_PASSWORD configured in your VPS .env configuration
@@ -217,10 +218,11 @@ add name=hsprof-billunet \
     radius-mac-format="XX:XX:XX:XX:XX:XX"
 
 # 3. Create and Enable the Hotspot Server on the default LAN bridge
+# Note: Set address-pool to 'none' or replace with your actual DHCP pool name (e.g. hs-pool-1)
 /ip hotspot
 add name=hs-billunet \
     interface=bridge \
-    address-pool=default-dhcp \
+    address-pool=none \
     profile=hsprof-billunet \
     disabled=no
 ```
@@ -229,28 +231,32 @@ add name=hs-billunet \
 
 ## Phase 8: Hotspot Walled Garden Configuration
 
-Allow unauthenticated clients to reach the captive portal frontend, the backend API, and payment gateways.
+Allow unauthenticated clients to reach the captive portal frontend, the backend API, and payment gateways over both HTTP and HTTPS.
 
 ```routeros
-/ip hotspot walled-garden
+/ip hotspot walled-garden ip
 # 1. Allow the BilluNet Portal Domains (Frontend & Backend APIs)
-add dst-host=billunet.lupestationery.org action=allow
-add dst-host=billunet-api.lupestationery.org action=allow
+add dst-host=billunet.lupestationery.org action=accept
+add dst-host=billunet-api.lupestationery.org action=accept
+add dst-address=178.238.233.102 action=accept
+add dst-address=10.20.20.1 action=accept
 
-# 2. Allow Local VPN Subnet Access (for Dev/Tunnel environments)
-add dst-host=10.20.20.1 action=allow
+# 2. Allow Iconify & fallback domains
+add dst-host=*.iconify.design action=accept
+add dst-host=*.simplesvg.com action=accept
+add dst-host=*.unisvg.com action=accept
 
 # 3. Allow ClickPesa Gateway
-add dst-host=*.clickpesa.com action=allow
-add dst-host=clickpesa.com action=allow
+add dst-host=*.clickpesa.com action=accept
+add dst-host=clickpesa.com action=accept
 
 # 4. Allow Flutterwave Gateway
-add dst-host=*.flutterwave.com action=allow
-add dst-host=flutterwave.com action=allow
+add dst-host=*.flutterwave.com action=accept
+add dst-host=flutterwave.com action=accept
 
 # 5. Allow Google Fonts (used by Portal Front-end UI)
-add dst-host=fonts.googleapis.com action=allow
-add dst-host=fonts.gstatic.com action=allow
+add dst-host=fonts.googleapis.com action=accept
+add dst-host=fonts.gstatic.com action=accept
 ```
 
 ---
@@ -320,3 +326,74 @@ add name="billunet-hb" interval=60s on-event={
 4. Complete the login or plan purchase.
 5. Once authorized, the portal will request `/api/captive/continue` which triggers the router's login and authorizes internet access.
 6. Verify that the router appears as `ONLINE` in the BilluNet administration dashboard.
+
+---
+
+## Appendix: Local VirtualBox Practice Environment
+
+To practice configuring MikroTik RouterOS and integrating it with your local development environment without physical router hardware, you can set up a virtual sandbox inside **VirtualBox**.
+
+### Step 1: Download MikroTik CHR
+Download the **VDI Image** of the MikroTik Cloud Hosted Router (CHR) from the [MikroTik Downloads page](https://mikrotik.com/download).
+
+### Step 2: VirtualBox VM Network Configuration
+Create a Linux (64-bit) VM in VirtualBox with 256MB RAM and assign the downloaded VDI file as its virtual hard disk. Then, configure three network adapters in the VM settings:
+- **Adapter 1 (WAN)**: Attached to **NAT** (gives the router VM internet access via the host).
+- **Adapter 2 (LAN)**: Attached to **Internal Network** (named `hotspot-lan`, where client test VMs will connect).
+- **Adapter 3 (Admin Management)**: Attached to **Host-only Adapter** (e.g. `VirtualBox Host-Only Ethernet Adapter`, allowing your host PC and Winbox to communicate with the router).
+
+### Step 3: Initial IP Setup (MikroTik Console)
+Start the VM, login as `admin` (no password), set a new password, and run this command in the CLI to set up management access:
+```routeros
+/ip address add address=192.168.56.10/24 interface=ether3 network=192.168.56.0
+```
+Connect Winbox from your Windows Host PC to `192.168.56.10`.
+
+### Step 4: Configure DHCP & NAT
+Open the Terminal in Winbox and run the following configuration overlay to prepare the Hotspot interface and enable NAT:
+```routeros
+# Create bridge and assign ports
+/interface bridge add name=bridge-hotspot
+/interface bridge port add bridge=bridge-hotspot interface=ether2
+
+# Configure Local LAN Subnet and IP Pool
+/ip address add address=192.168.88.1/24 interface=bridge-hotspot network=192.168.88.0
+/ip pool add name=hotspot-pool ranges=192.168.88.10-192.168.88.254
+/ip dhcp-server add address-pool=hotspot-pool disabled=no interface=bridge-hotspot name=dhcp-hotspot
+/ip dhcp-server network add address=192.168.88.0/24 gateway=192.168.88.1 dns-server=8.8.8.8,1.1.1.1
+
+# Enable WAN NAT Masquerading
+/ip firewall nat add chain=srcnat action=masquerade out-interface=ether1 comment="NAT to Internet"
+```
+
+### Step 5: Hotspot & Captive Redirect Configuration
+Configure the Hotspot Server, walled garden, and redirect template to target your Host PC's local server (Vite frontend on port 5173, Spring Boot backend on port 8081):
+```routeros
+# Setup Hotspot Server Profile
+/ip hotspot user profile add name=billunet-profile shared-users=1
+/ip hotspot profile add name=hsprof-billunet hotspot-address=192.168.88.1 login-by=http-pap use-radius=no
+/ip hotspot add name=hs-billunet interface=bridge-hotspot address-pool=hotspot-pool profile=hsprof-billunet disabled=no
+
+# Allow access to local Host IP in Walled Garden
+/ip hotspot walled-garden add dst-host=192.168.56.1 action=allow
+```
+Upload a custom `login.html` file to the router's `flash/hotspot/login.html` directory to redirect unauthenticated guest clients to the local Vite server:
+```html
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+<script>
+window.location.href =
+  "http://192.168.56.1:5173/?" +
+  "clientmac=$(mac)&clientip=$(ip)" +
+  "&router_code=DEV-ROUTER-01" +
+  "&link_login=$(link-login-only)&link_orig=$(link-orig-esc)";
+</script>
+</body>
+</html>
+```
+
+### Step 6: Test Client VM Setup
+Create another lightweight guest VM (e.g. Lubuntu or Alpine) and set its Network Adapter 1 to **Internal Network** (named `hotspot-lan`). When you start this VM and open a web browser to search for any HTTP site (like `http://neverssl.com`), you will be intercepted and redirected to your local captive portal on the Host machine for authorization!
+
